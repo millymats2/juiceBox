@@ -15,7 +15,29 @@ usersRouter.get("/", async (req, res) => {
   });
 });
 
-usersRouter.post("/login", token, async (req, res, next) => {
+function authRequired(req, res, next) {
+  const prefix = "Bearer ";
+  const authHeader = req.header("Authorization");
+
+  if (!authHeader) {
+    res.status(401).send({ message: "You are not authorized!!!" });
+  } else {
+    if (authHeader.startsWith(prefix)) {
+      const token = authHeader.slice(prefix.length);
+
+      const jwtUser = jwt.verify(token, process.env.JWT_SECRET);
+
+      if (
+        jwtUser.username === user.username &&
+        jwtUser.password === user.password
+      ) {
+        req.user = jwtUser;
+        next();
+      }
+    }
+  }
+}
+usersRouter.post("/login", async (req, res, next) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
@@ -26,10 +48,11 @@ usersRouter.post("/login", token, async (req, res, next) => {
   }
 
   try {
-    const user = await getUserByUsername(username);
-    const token = jwt.sign({ id, username }, process.env.JWT_SECRET);
+    const user = await getUserByUsername(username, id);
+
     if (user && user.password == password) {
-      res.send(token, { message: "you're logged in!" });
+      const token = jwt.sign(username, id, process.env.JWT_SECRET);
+      res.send(token, { message: "you're logged in!", token });
     } else {
       next({
         name: "IncorrectCredentialsError",
